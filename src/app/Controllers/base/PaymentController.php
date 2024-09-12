@@ -42,7 +42,7 @@ class PaymentController extends Controller
         } else {
             $this->ref = 5;
         }
-        $this->endpoint = ($_ENV['TRIPAY_ENVIRONMENT'] == 'production') ? 'api' : 'api-sandbox';
+        $this->endpoint = ($_ENV['TRIPAY_ENVIRONMENT'] == 'sandbox') ? 'api-sandbox' : 'api';
     }
 
     public function isolir() {
