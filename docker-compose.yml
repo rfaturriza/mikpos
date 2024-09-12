@@ -1,8 +1,25 @@
-version: "2.1"
+name: mikpos
+version: "3.8"
+
 services:
-  mikhmon:
-    image: animegasan/mikpos:latest
+  mikpos:
+    image: rfaturriza/mikpos:latest
     container_name: mikpos
     ports:
       - 8080:8080
     restart: unless-stopped
+    volumes:
+      - mikpos:/var/www/html
+      - mikpos_db:/var/lib/mysql
+    environment:
+      CI_ENVIRONMENT: ${CI_ENVIRONMENT}
+      TRIPAY_ENVIRONMENT: ${TRIPAY_ENVIRONMENT}
+      USER_ID: ${USER_ID}
+      ROUTER_ID: ${ROUTER_ID}
+      HTTP_HOST: ${HTTP_HOST}
+
+volumes:
+  mikpos:
+    driver: local
+  mikpos_db:
+    driver: local
