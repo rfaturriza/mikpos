@@ -199,15 +199,28 @@ role="dialog">
         </div>
         
         <div class="modal-body" style="padding:0 !important;">
-            <?php foreach ($response->data->instructions as $row){ ?>
-                <button id="instructionstitle" class="accordion"><?= $row->title ?><div class="btnarrow"> <i class="arrow"></i></div></button>
-                <div class="accordion-content">
-                <ol type="1" style="margin-top:5px;margin-left:5px;margin-bottom:5px;">
-                    <?php foreach ($row->steps as $steps){ ?>
-                        <li><?= $steps ?></li>
-                    <?php } ?>
-                </ol>
-                </div>
+            <?php if (!empty($response->data->instructions) && is_array($response->data->instructions)) { ?>
+                <?php foreach ($response->data->instructions as $row) { ?>
+                    <button id="instructionstitle" class="accordion">
+                        <?= htmlspecialchars($row->title, ENT_QUOTES, 'UTF-8') ?>
+                        <div class="btnarrow">
+                            <i class="arrow"></i>
+                        </div>
+                    </button>
+                    <div class="accordion-content">
+                        <ol type="1" style="margin-top:5px; margin-left:5px; margin-bottom:5px;">
+                            <?php if (!empty($row->steps) && is_array($row->steps)) { ?>
+                                <?php foreach ($row->steps as $step) { ?>
+                                    <li><?= htmlspecialchars($step, ENT_QUOTES, 'UTF-8') ?></li>
+                                <?php } ?>
+                            <?php } else { ?>
+                                <li>No steps available.</li>
+                            <?php } ?>
+                        </ol>
+                    </div>
+                <?php } ?>
+            <?php } else { ?>
+                <p>No instructions available.</p>
             <?php } ?>
         </div>
         <div class="modal-footer d-flex justify-content-center">
