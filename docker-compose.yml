@@ -1,5 +1,4 @@
 name: mikpos
-version: "3.8"
 
 services:
   mikpos:
