@@ -514,7 +514,7 @@ class PaymentController extends Controller
                     return redirect()->to(base_url('payment') . '/' . $userid . '/' . $routerid);
                 }
             } else {
-                $this->session->setFlashdata('error', ['Metode pembayran sedang gangguan, silahkan coba dengan metode pembayaran yang berbeda']);
+                $this->session->setFlashdata('error', ['Metode pembayaran sedang gangguan, silahkan coba dengan metode pembayaran yang berbeda']);
                 return redirect()->to(base_url('payment') . '/' . $userid . '/' . $routerid);
             }
             
@@ -528,20 +528,20 @@ class PaymentController extends Controller
         $userid = $this->request->getPost('userid');
         $routerid = $this->request->getPost('routerid');
         $template = $this->request->getPost('template');
-        $gr = $this->ROSPaymentModel->get_router_by_id($routerid,$userid);
+        $gr = $this->ROSPaymentModel->get_router_by_id($routerid, $userid);
         date_default_timezone_set($gr[0]->router_ntp);
         $kodevoucher = $this->request->getPost('kodevoucher');
         $profile = $this->request->getPost('paket');
         $payment_method = $this->request->getPost('payment_method');
-
-        $gr = $this->ROSPaymentModel->gr($routerid,$userid);
+    
+        $gr = $this->ROSPaymentModel->gr($routerid, $userid);
         $this->ros->connect($gr[0]->router_host, $gr[0]->router_user, $this->key->de($gr[0]->router_pass));
-
+    
         $get_hotspot_user = $this->ros->comm("/ip/hotspot/user/print", array("?name" => "$kodevoucher"));
         $get_profile = $this->ros->comm("/ip/hotspot/user/profile/print", array("?name" => "$profile"));
         $get_profile_sch = $this->ros->comm("/system/scheduler/print", array("?name" => "$profile"));
         $this->ros->disconnect;
-
+    
         if (!empty(explode(",", $get_profile[0]['on-login'])[4])) {
             $price = explode(",", $get_profile[0]['on-login'])[4];
         } else {
@@ -550,58 +550,72 @@ class PaymentController extends Controller
         $validity = explode(",", $get_profile[0]['on-login'])[3];
         $min = strtotime("-30 years");
         $max = strtotime("-19 years");
-        $time = rand($min,$max);
-        $generatedate = date("dm",$time);
-        $generatephone = '0812' . rand(11111111,99999999);
+        $time = rand($min, $max);
+        $generatedate = date("dm", $time);
+        $generatephone = '0812' . rand(11111111, 99999999);
+    
         if (empty($get_hotspot_user) && !empty($get_profile) && !empty($get_profile_sch)) {
-            $getapi = $this->ROSPaymentModel->get_tripay_api($routerid,$userid);
-            $apiKey       = $getapi[0]->tripay_api_key;
-            $privateKey   = $getapi[0]->tripay_private_key;
+            $getapi = $this->ROSPaymentModel->get_tripay_api($routerid, $userid);
+            $apiKey = $getapi[0]->tripay_api_key;
+            $privateKey = $getapi[0]->tripay_private_key;
             $merchantCode = $getapi[0]->tripay_merchant_code;
-            $merchantRef  = 'INVB/' . $userid . '/' . $routerid . '/' . strtoupper($kodevoucher) . '/' .  date("dmy",time()) . '/' . rand(1,999);
-            $amount       = $price;
+            $merchantRef = 'INVB/' . $userid . '/' . $routerid . '/' . strtoupper($kodevoucher) . '/' . date("dmy", time()) . '/' . rand(1, 999);
+            $amount = $price;
             $data = [
-                'method'         => $payment_method,
-                'merchant_ref'   => $merchantRef,
-                'amount'         => $amount,
-                'customer_name'  => $kodevoucher,
-                'customer_email' => substr(str_shuffle('abcdefghijklmnopqrstuvwxyz'),1,1) . $kodevoucher . $generatedate . '@gmail.com',
+                'method' => $payment_method,
+                'merchant_ref' => $merchantRef,
+                'amount' => $amount,
+                'customer_name' => $kodevoucher,
+                'customer_email' => substr(str_shuffle('abcdefghijklmnopqrstuvwxyz'), 1, 1) . $kodevoucher . $generatedate . '@gmail.com',
                 'customer_phone' => $generatephone,
-                'order_items'    => [
+                'order_items' => [
                     [
-                        'sku'         => 'Voucher-' . $validity,
-                        'name'        => 'Pembelian-' . $kodevoucher,
-                        'price'       => $price,
-                        'quantity'    => 1
+                        'sku' => 'Voucher-' . $validity,
+                        'name' => 'Pembelian-' . $kodevoucher,
+                        'price' => $price,
+                        'quantity' => 1
                     ]
                 ],
-                'return_url'   => base_url('voucher') . '/' . $userid . '/' . $routerid,
-                'expired_time' => (time() + (24 * 60 * 60)), // 24 jam
-                'signature'    => hash_hmac('sha256', $merchantCode.$merchantRef.$amount, $privateKey)
+                'return_url' => base_url('voucher') . '/' . $userid . '/' . $routerid,
+                'expired_time' => (time() + (24 * 60 * 60)), // 24 hours
+                'signature' => hash_hmac('sha256', $merchantCode . $merchantRef . $amount, $privateKey)
             ];
-            
-            $curl = curl_init();
-            
-            curl_setopt_array($curl, [
-                CURLOPT_FRESH_CONNECT  => true,
-                CURLOPT_URL            => 'https://tripay.co.id/' . $this->endpoint . '/transaction/create',
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_HEADER         => false,
-                CURLOPT_HTTPHEADER     => ['Authorization: Bearer '.$apiKey],
-                CURLOPT_FAILONERROR    => false,
-                CURLOPT_POST           => true,
-                CURLOPT_POSTFIELDS     => http_build_query($data),
-                CURLOPT_IPRESOLVE      => CURL_IPRESOLVE_V4
-            ]);
-            
-            $response_curl = curl_exec($curl);
-            $error_curl = curl_error($curl);
-
-            $response = json_decode($response_curl);
-            $error = json_decode($error_curl);
-            curl_close($curl);
-            
-            if (empty($error) && $response->success == true) {
+    
+            $retryCount = 0;
+            $maxRetries = 10;
+            $success = false;
+            $response = null;
+    
+            while ($retryCount < $maxRetries && !$success) {
+                $curl = curl_init();
+                curl_setopt_array($curl, [
+                    CURLOPT_FRESH_CONNECT => true,
+                    CURLOPT_URL => 'https://tripay.co.id/' . $this->endpoint . '/transaction/create',
+                    CURLOPT_RETURNTRANSFER => true,
+                    CURLOPT_HEADER => false,
+                    CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $apiKey],
+                    CURLOPT_FAILONERROR => false,
+                    CURLOPT_POST => true,
+                    CURLOPT_POSTFIELDS => http_build_query($data),
+                    CURLOPT_IPRESOLVE => CURL_IPRESOLVE_V4
+                ]);
+    
+                $response_curl = curl_exec($curl);
+                $error_curl = curl_error($curl);
+                curl_close($curl);
+    
+                $response = json_decode($response_curl);
+                $error = json_decode($error_curl);
+    
+                if (empty($error) && isset($response->success) && $response->success == true) {
+                    $success = true;
+                } else {
+                    $retryCount++;
+                    sleep(2);  // Optional delay between retries
+                }
+            }
+    
+            if ($success) {
                 $dataTransaksi = [
                     'user_id' => $userid,
                     'router_id' => $routerid,
@@ -611,10 +625,10 @@ class PaymentController extends Controller
                     'payment_name' => $response->data->payment_name,
                     'amount_received' => $response->data->amount_received,
                     'return_url' => base_url('invoice') . '/' . $userid . '/' . $routerid . '/' . $response->data->reference,
-                    'service' => explode("-",$response->data->order_items[0]->sku)[0],
-                    'profile' => $profile,             
-                    'query_status' => 'waiting payment',             
-                    'status' => $response->data->status,              
+                    'service' => explode("-", $response->data->order_items[0]->sku)[0],
+                    'profile' => $profile,
+                    'query_status' => 'waiting payment',
+                    'status' => $response->data->status,
                 ];
                 $saveData = $this->ROSPaymentModel->add_transaksi($dataTransaksi);
                 if ($saveData) {
@@ -625,22 +639,12 @@ class PaymentController extends Controller
                     }
                 } else {
                     $this->session->setFlashdata('error', ['Gagal request, silahkan coba lagi...']);
-                    if ($template == 'yes') {
-                        return redirect()->to(base_url('tbeli') . '/' . $userid . '/' . $routerid);
-                    } else {
-                        return redirect()->to(base_url('voucher') . '/' . $userid . '/' . $routerid);
-                    }
-                    
+                    return $template == 'yes' ? redirect()->to(base_url('tbeli') . '/' . $userid . '/' . $routerid) : redirect()->to(base_url('voucher') . '/' . $userid . '/' . $routerid);
                 }
             } else {
-                $this->session->setFlashdata('error', ['Metode pembayran sedang gangguan, silahkan coba dengan metode pembayaran yang berbeda.']);
-                if ($template == 'yes') {
-                    return redirect()->to(base_url('tbeli') . '/' . $userid . '/' . $routerid);
-                } else {
-                    return redirect()->to(base_url('voucher') . '/' . $userid . '/' . $routerid);
-                }
+                $this->session->setFlashdata('error', ['Metode pembayaran sedang gangguan, silahkan coba dengan metode pembayaran yang berbeda.']);
+                return $template == 'yes' ? redirect()->to(base_url('tbeli') . '/' . $userid . '/' . $routerid) : redirect()->to(base_url('voucher') . '/' . $userid . '/' . $routerid);
             }
-            
         } else {
             $this->session->setFlashdata('error', ['Kode voucher sudah digunakan, silahkan ubah kode voucher!']);
             return redirect()->to(base_url('voucher') . '/' . $userid . '/' . $routerid);
@@ -754,7 +758,7 @@ class PaymentController extends Controller
                     
                 }
             } else {
-                $this->session->setFlashdata('error', ['Metode pembayran sedang gangguan, silahkan coba dengan metode pembayaran yang berbeda.']);
+                $this->session->setFlashdata('error', ['Metode pembayaran sedang gangguan, silahkan coba dengan metode pembayaran yang berbeda.']);
                 if ($template == 'yes') {
                     return redirect()->to(base_url('tperpanjang') . '/' . $userid . '/' . $routerid);
                 } else {
