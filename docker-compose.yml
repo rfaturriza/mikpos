@@ -8,7 +8,6 @@ services:
       - 8080:8080
     restart: unless-stopped
     volumes:
-      - mikpos:/var/www/html
       - mikpos_db:/var/lib/mysql
     environment:
       CI_ENVIRONMENT: ${CI_ENVIRONMENT}
@@ -18,7 +17,5 @@ services:
       HTTP_HOST: ${HTTP_HOST}
 
 volumes:
-  mikpos:
-    driver: local
   mikpos_db:
     driver: local
