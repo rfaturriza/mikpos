@@ -17,5 +17,5 @@ services:
       HTTP_HOST: ${HTTP_HOST}
 
 volumes:
-  mikpos_db:
+  db:
     driver: local
