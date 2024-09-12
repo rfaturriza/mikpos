@@ -594,9 +594,13 @@ class PaymentController extends Controller
                 CURLOPT_IPRESOLVE      => CURL_IPRESOLVE_V4
             ]);
             
-            $response = json_decode(curl_exec($curl));
-            $error = json_decode(curl_error($curl));
+            $response_curl = curl_exec($curl);
+            $error_curl = curl_error($curl);
+
+            $response = json_decode($response_curl);
+            $error = json_decode($error_curl);
             curl_close($curl);
+            
             if (empty($error) && $response->success == true) {
                 $dataTransaksi = [
                     'user_id' => $userid,
