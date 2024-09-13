@@ -787,41 +787,62 @@ class PaymentController extends Controller
         $routerid = $this->uri->getSegment($this->routerid);
         $ref = $this->uri->getSegment($this->ref);
         $data['user'] = $this->ROSPaymentModel->get_user_by_id($userid);
-        $data['router'] = $this->ROSPaymentModel->get_router_by_id($routerid,$userid);
+        $data['router'] = $this->ROSPaymentModel->get_router_by_id($routerid, $userid);
+    
         if (!empty($data['router']) && !empty($data['router'])) {
-            $getapi = $this->ROSPaymentModel->get_tripay_api($routerid,$userid);
+            $getapi = $this->ROSPaymentModel->get_tripay_api($routerid, $userid);
             $apiKey = $getapi[0]->tripay_api_key;
-            $payload = ['reference'	=> $ref];
-            $curl = curl_init();
-            curl_setopt_array($curl, [
-                CURLOPT_FRESH_CONNECT  => true,
-                CURLOPT_URL            => 'https://tripay.co.id/' . $this->endpoint . '/transaction/detail?'.http_build_query($payload),
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_HEADER         => false,
-                CURLOPT_HTTPHEADER     => ['Authorization: Bearer '.$apiKey],
-                CURLOPT_FAILONERROR    => false,
-                CURLOPT_IPRESOLVE      => CURL_IPRESOLVE_V4
-            ]);
-            $response = json_decode(curl_exec($curl));
-            $error = json_decode(curl_error($curl));
-            curl_close($curl);
-
-            $pmethod = ['code' => $response->data->payment_method];
-            $curl = curl_init();
-            curl_setopt_array($curl, array(
-            CURLOPT_FRESH_CONNECT  => true,
-            CURLOPT_URL            => 'https://tripay.co.id/' . $this->endpoint . '/merchant/payment-channel?'.http_build_query($pmethod),
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_HEADER         => false,
-            CURLOPT_HTTPHEADER     => ['Authorization: Bearer '.$apiKey],
-            CURLOPT_FAILONERROR    => false,
-            CURLOPT_IPRESOLVE      => CURL_IPRESOLVE_V4
-            ));
-
-            $res = curl_exec($curl);
-            $err = curl_error($curl);
-            curl_close($curl);
-
+            $payload = ['reference' => $ref];
+            $retryLimit = 10;
+            $attempt = 0;
+            $unauthorizedMessage = "Unauthorized IP";
+    
+            do {
+                $attempt++;
+    
+                // First curl to get the transaction details
+                $curl = curl_init();
+                curl_setopt_array($curl, [
+                    CURLOPT_FRESH_CONNECT  => true,
+                    CURLOPT_URL            => 'https://tripay.co.id/' . $this->endpoint . '/transaction/detail?' . http_build_query($payload),
+                    CURLOPT_RETURNTRANSFER => true,
+                    CURLOPT_HEADER         => false,
+                    CURLOPT_HTTPHEADER     => ['Authorization: Bearer ' . $apiKey],
+                    CURLOPT_FAILONERROR    => false,
+                    CURLOPT_IPRESOLVE      => CURL_IPRESOLVE_V4
+                ]);
+                $response = json_decode(curl_exec($curl));
+                $error = curl_error($curl);
+                curl_close($curl);
+    
+                // Check for Unauthorized IP in response
+                if (!empty($response->message) && strpos($response->message, $unauthorizedMessage) !== false) {
+                    continue;
+                }
+    
+                // Second curl to get the payment channel details
+                $pmethod = ['code' => $response->data->payment_method];
+                $curl = curl_init();
+                curl_setopt_array($curl, [
+                    CURLOPT_FRESH_CONNECT  => true,
+                    CURLOPT_URL            => 'https://tripay.co.id/' . $this->endpoint . '/merchant/payment-channel?' . http_build_query($pmethod),
+                    CURLOPT_RETURNTRANSFER => true,
+                    CURLOPT_HEADER         => false,
+                    CURLOPT_HTTPHEADER     => ['Authorization: Bearer ' . $apiKey],
+                    CURLOPT_FAILONERROR    => false,
+                    CURLOPT_IPRESOLVE      => CURL_IPRESOLVE_V4
+                ]);
+                $res = curl_exec($curl);
+                $err = curl_error($curl);
+                curl_close($curl);
+    
+                // Check for Unauthorized IP in payment response
+                if (!empty($res) && strpos($res, $unauthorizedMessage) !== false) {
+                    continue;
+                }
+    
+            } while (($attempt < $retryLimit) && (!empty($error) || !empty($err)));
+    
             if (empty($error) && empty($err)) {
                 $data['payment'] = $res;
                 $data['response'] = $response;
@@ -829,7 +850,7 @@ class PaymentController extends Controller
                 $data['routerid'] = $routerid;
                 return view('payment/invoice', $data);
             } else {
-                echo '<p style="text-align:center">Something Wrong</p>';
+                echo '<p style="text-align:center">Something went wrong. Please try again.</p>';
             }
         } else {
             echo '<p style="text-align:center">Wrong URL</p>';
