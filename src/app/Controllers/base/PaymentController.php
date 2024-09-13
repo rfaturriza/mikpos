@@ -11,10 +11,10 @@ use App\Libraries\RouterosAPI;
  * true for production
  * false for development
  */
-define("userid", ($_ENV['CI_ENVIRONMENT'] == 'production') ? true : false);
-define("routerid", ($_ENV['CI_ENVIRONMENT'] == 'production') ? true : false);
-define("endpoint", ($_ENV['CI_ENVIRONMENT'] == 'production') ? true : false);
-define("ref", ($_ENV['CI_ENVIRONMENT'] == 'production') ? true : false);
+define("userid", (getenv('CI_ENVIRONMENT') == 'production') ? true : false);
+define("routerid", (getenv('CI_ENVIRONMENT') == 'production') ? true : false);
+define("endpoint", (getenv('CI_ENVIRONMENT') == 'production') ? true : false);
+define("ref", (getenv('CI_ENVIRONMENT') == 'production') ? true : false);
 
 class PaymentController extends Controller
 {
@@ -28,12 +28,12 @@ class PaymentController extends Controller
         $this->uri = $this->request->uri;
         $this->key = new \App\Libraries\Key();
         if (userid == true) {
-            $this->userid = $_ENV['USER_ID'];
+            $this->userid = 2;
         } else {
             $this->userid = 3;
         }
         if (routerid == true) {
-            $this->routerid = $_ENV['ROUTER_ID'];
+            $this->routerid = 3;
         } else {
             $this->routerid = 4;
         }
@@ -42,7 +42,7 @@ class PaymentController extends Controller
         } else {
             $this->ref = 5;
         }
-        $this->endpoint = ($_ENV['TRIPAY_ENVIRONMENT'] == 'sandbox') ? 'api-sandbox' : 'api';
+        $this->endpoint = (getenv('TRIPAY_ENVIRONMENT') == 'sandbox') ? 'api-sandbox' : 'api';
     }
 
     public function isolir() {
