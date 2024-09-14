@@ -611,7 +611,7 @@ class PaymentController extends Controller
                     $success = true;
                 } else {
                     $retryCount++;
-                    sleep(2);  // Optional delay between retries
+                    sleep(1);  // Optional delay between retries
                 }
             }
     
@@ -843,7 +843,7 @@ class PaymentController extends Controller
     
             } while (($attempt < $retryLimit) && (!empty($error) || !empty($err)));
     
-            if (empty($error) && empty($err)) {
+            if (empty($error) && empty($err) && $response->success == true && json_decode($res)->success == true) {
                 $data['payment'] = $res;
                 $data['response'] = $response;
                 $data['userid'] = $userid;
@@ -862,49 +862,92 @@ class PaymentController extends Controller
         $routerid = $this->uri->getSegment($this->routerid);
         $ref = $this->uri->getSegment($this->ref);
         $data['user'] = $this->ROSPaymentModel->get_user_by_id($userid);
-        $data['router'] = $this->ROSPaymentModel->get_router_by_id($routerid,$userid);
-        if (!empty($data['router']) && !empty($data['router'])) {
-            $getapi = $this->ROSPaymentModel->get_tripay_api($routerid,$userid);
+        $data['router'] = $this->ROSPaymentModel->get_router_by_id($routerid, $userid);
+    
+        if (!empty($data['router'])) {
+            $getapi = $this->ROSPaymentModel->get_tripay_api($routerid, $userid);
             $apiKey = $getapi[0]->tripay_api_key;
-            $payload = ['reference'	=> $ref];
-            $curl = curl_init();
-            curl_setopt_array($curl, [
-                CURLOPT_FRESH_CONNECT  => true,
-                CURLOPT_URL            => 'https://tripay.co.id/' . $this->endpoint . '/transaction/detail?'.http_build_query($payload),
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_HEADER         => false,
-                CURLOPT_HTTPHEADER     => ['Authorization: Bearer '.$apiKey],
-                CURLOPT_FAILONERROR    => false,
-                CURLOPT_IPRESOLVE      => CURL_IPRESOLVE_V4
-            ]);
-            $response = json_decode(curl_exec($curl));
-            $error = json_decode(curl_error($curl));
-            curl_close($curl);
-
+            $payload = ['reference' => $ref];
+    
+            $retryCount = 0;
+            $maxRetries = 10;
+            $response = null;
+            $error = null;
+            $paymentResponse = null;
+    
+            do {
+                // First cURL request for transaction details
+                $curl = curl_init();
+                curl_setopt_array($curl, [
+                    CURLOPT_FRESH_CONNECT  => true,
+                    CURLOPT_URL            => 'https://tripay.co.id/' . $this->endpoint . '/transaction/detail?' . http_build_query($payload),
+                    CURLOPT_RETURNTRANSFER => true,
+                    CURLOPT_HEADER         => false,
+                    CURLOPT_HTTPHEADER     => ['Authorization: Bearer ' . $apiKey],
+                    CURLOPT_FAILONERROR    => false,
+                    CURLOPT_IPRESOLVE      => CURL_IPRESOLVE_V4
+                ]);
+                $response = json_decode(curl_exec($curl));
+                $error = curl_error($curl);
+                curl_close($curl);
+    
+                // Check if there is an Unauthorized IP error in the response
+                if (!empty($response->message) && strpos($response->message, 'Unauthorized IP') !== false) {
+                    $retryCount++;
+                    sleep(1); // Adding a delay between retries
+                } else {
+                    break; // Exit loop if no Unauthorized IP error
+                }
+    
+            } while ($retryCount < $maxRetries);
+    
+            if ($retryCount === $maxRetries) {
+                echo '<p style="text-align:center">Unauthorized IP error after multiple attempts</p>';
+                return;
+            }
+    
+            // Second cURL request for payment method
             $pmethod = ['code' => $response->data->payment_method];
-            $curl = curl_init();
-            curl_setopt_array($curl, array(
-            CURLOPT_FRESH_CONNECT  => true,
-            CURLOPT_URL            => 'https://tripay.co.id/' . $this->endpoint . '/merchant/payment-channel?'.http_build_query($pmethod),
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_HEADER         => false,
-            CURLOPT_HTTPHEADER     => ['Authorization: Bearer '.$apiKey],
-            CURLOPT_FAILONERROR    => false,
-            CURLOPT_IPRESOLVE      => CURL_IPRESOLVE_V4
-            ));
-
-            $res = curl_exec($curl);
-            $err = curl_error($curl);
-            curl_close($curl);
-
-            if (empty($error) && empty($err)) {
-                $data['payment'] = $res;
+            $retryCount = 0;
+    
+            do {
+                $curl = curl_init();
+                curl_setopt_array($curl, [
+                    CURLOPT_FRESH_CONNECT  => true,
+                    CURLOPT_URL            => 'https://tripay.co.id/' . $this->endpoint . '/merchant/payment-channel?' . http_build_query($pmethod),
+                    CURLOPT_RETURNTRANSFER => true,
+                    CURLOPT_HEADER         => false,
+                    CURLOPT_HTTPHEADER     => ['Authorization: Bearer ' . $apiKey],
+                    CURLOPT_FAILONERROR    => false,
+                    CURLOPT_IPRESOLVE      => CURL_IPRESOLVE_V4
+                ]);
+                $paymentResponse = curl_exec($curl);
+                $err = curl_error($curl);
+                curl_close($curl);
+    
+                // Check if paymentResponse contains Unauthorized IP message
+                if (!empty($paymentResponse) && strpos($paymentResponse, 'Unauthorized IP') !== false) {
+                    $retryCount++;
+                    sleep(1); // Adding a delay between retries
+                } else {
+                    break; // Exit loop if no Unauthorized IP error
+                }
+    
+            } while ($retryCount < $maxRetries);
+    
+            if ($retryCount === $maxRetries) {
+                echo '<p style="text-align:center">Unauthorized IP error after multiple attempts in payment</p>';
+                return;
+            }
+            // Successful response and payment data handling
+            if (empty($error) && empty($err) && $response->success == true && json_decode($paymentResponse)->success == true) {
+                $data['payment'] = $paymentResponse;
                 $data['response'] = $response;
                 $data['userid'] = $userid;
                 $data['routerid'] = $routerid;
                 return view('template/tinvoice', $data);
             } else {
-                echo '<p style="text-align:center">Something Wrong</p>';
+                echo '<p style="text-align:center">Something went wrong</p>';
             }
         } else {
             echo '<p style="text-align:center">Wrong URL</p>';
